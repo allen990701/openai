@@ -307,3 +307,58 @@ class AzureChatAgent:
         messages.extend(history_context)
 
         return messages
+
+
+    def build_messages5(self, prompt: Union[str, List[Dict]], file_obj: Optional[Any] = None, sys_prompt: str = "") -> List[Dict]:
+        """
+        僅負責建構、裁切歷史紀錄與注入檔案，回傳準備好的 messages 陣列。
+        """
+        # 1. 處理歷史紀錄
+        history = None
+        if isinstance(prompt, str):
+            try:
+                history = json.loads(prompt)
+            except Exception:
+                # 若不是 JSON，視為單純的文字 prompt
+                history = [{"role": "user", "content": prompt}]
+        else:
+            history = prompt
+
+        # 假設 ContextManager 存在
+        history_context = []
+        if isinstance(history, list):
+            # 這裡調用您原本的 ContextManager
+            h = ContextManager.get_ai_context_auto(history, n=5)
+            if isinstance(h, list):
+                history_context = h
+
+        # 2. 解析並注入檔案
+        if file_obj and history_context:
+            # 這裡調用您原本的 DocumentParser
+            parsed_data = DocumentParser.parse(file_obj)
+            self._inject_file_context_5(history_context, file_obj, parsed_data)
+
+        # 3. 準備發送給 LLM 的訊息
+        messages = []
+        if sys_prompt:
+            messages.append({"role": "developer", "content": sys_prompt})
+        
+        messages.extend(history_context)
+
+        return messages
+
+
+    def _encode_file_to_base64(self, file_data: Any) -> str:
+        """協助將檔案物件轉為 base64"""
+        if hasattr(file_data, "file_base64"):
+            return file_data.file_base64
+        return ""
+
+    def _inject_file_context_5(self, history_context: List[Dict], file_obj: Any, parsed_data: str):
+        """將解析後的檔案內容注入最後一則訊息中"""
+        if history_context:
+            last_msg = history_context[-1]
+            if isinstance(last_msg.get("content"), list):
+                last_msg["content"].append({"type": "input_text", "text": f"\n\n[檔案內容]: {parsed_data}"})
+            else:
+                last_msg["content"] += f"\n\n[檔案內容]: {parsed_data}" 
